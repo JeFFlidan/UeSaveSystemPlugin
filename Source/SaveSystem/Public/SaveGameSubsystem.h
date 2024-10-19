@@ -6,6 +6,7 @@
 #include "SaveGameSubsystem.generated.h"
 
 class USaveGameData;
+class UAbilitySystemComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnReadWriteSaveGame, USaveGameData*, SaveGameObj);
 
@@ -26,18 +27,24 @@ public:
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category = "Save System")
 	void SetSlotName(FString NewSlotName);
 
-	UFUNCTION(BlueprintCallable)
-	void WriteSaveGame(FString InSlotName = "");
+	UFUNCTION(BlueprintCallable, Category = "Save System")
+	virtual void WriteSaveGame(FString InSlotName = "");
 
-	UFUNCTION(BlueprintCallable)
-	void LoadSaveGame(FString InSlotName = "");
+	UFUNCTION(BlueprintCallable, Category = "Save System")
+	virtual void LoadSaveGame(FString InSlotName = "");
+
+	UFUNCTION(BlueprintCallable, Category = "Save System")
+	virtual void LoadPlayerAbilitySystemState();
 
 protected:
 	UPROPERTY()
 	TObjectPtr<USaveGameData> CurrentSaveGame;
 
 	FString CurrentSlotName;
+
+	virtual void SaveAbilitySystemState();
+	virtual UAbilitySystemComponent* FindPlayerAbilitySystemComponent() const;
 };

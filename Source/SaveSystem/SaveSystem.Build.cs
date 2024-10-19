@@ -38,7 +38,9 @@ public class SaveSystem : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
-				"DeveloperSettings"	
+				"DeveloperSettings",
+				"GameplayAbilities",
+				"GameplayTags"
 			}
 			);
 		

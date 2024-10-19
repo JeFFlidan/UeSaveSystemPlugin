@@ -3,7 +3,10 @@
 #pragma once
 
 #include "GameFramework/SaveGame.h"
+#include "GameplayTagContainer.h"
 #include "SaveGameData.generated.h"
+
+class UGameplayAbility;
 
 USTRUCT()
 struct FActorSaveData
@@ -20,6 +23,21 @@ struct FActorSaveData
 	TArray<uint8> ByteData;
 };
 
+USTRUCT()
+struct FGameplayAbilitySaveData
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	int32 Level;
+	
+	UPROPERTY()
+	FGameplayTagContainer DynamicTags;
+
+	UPROPERTY()
+	TSubclassOf<UGameplayAbility> AbilityClass;
+};
+
 /**
  * 
  */
@@ -31,4 +49,7 @@ class SAVESYSTEM_API USaveGameData : public USaveGame
 public:
 	UPROPERTY()
 	TArray<FActorSaveData> SavedActors;
+
+	UPROPERTY()
+	TArray<FGameplayAbilitySaveData> SavedPlayerAbilities;
 };

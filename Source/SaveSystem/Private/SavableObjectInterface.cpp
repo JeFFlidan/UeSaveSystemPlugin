@@ -1,6 +1,6 @@
 // Copyright Kyrylo Zaverukha. All Rights Reserved.
 
 
-#include "SavableActorInterface.h"
+#include "SavableObjectInterface.h"
 
 // Add default functionality here for any ISavableActorInterface functions that are not pure virtual.

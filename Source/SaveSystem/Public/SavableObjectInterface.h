@@ -4,11 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "SavableActorInterface.generated.h"
+#include "SavableObjectInterface.generated.h"
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
-class USavableActorInterface : public UInterface
+class USavableObjectInterface : public UInterface
 {
 	GENERATED_BODY()
 };
@@ -16,7 +16,7 @@ class USavableActorInterface : public UInterface
 /**
  * 
  */
-class SAVESYSTEM_API ISavableActorInterface
+class SAVESYSTEM_API ISavableObjectInterface
 {
 	GENERATED_BODY()
 
