@@ -38,6 +38,15 @@ struct FGameplayAbilitySaveData
 	TSubclassOf<UGameplayAbility> AbilityClass;
 };
 
+USTRUCT(BlueprintType)
+struct FSaveGameMetadata
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TObjectPtr<UTexture2D> Screenshot;
+};
+
 /**
  * 
  */
@@ -47,6 +56,13 @@ class SAVESYSTEM_API USaveGameData : public USaveGame
 	GENERATED_BODY()
 
 public:
+	/**
+	 * If the screenshot is a separate file, this variable will store the path to that screenshot.
+	 * Otherwise, this variable stores the screenshot binary data.
+	 */
+	UPROPERTY(AssetRegistrySearchable)
+	FString ScreenshotData;
+	
 	UPROPERTY()
 	TArray<FActorSaveData> SavedActors;
 

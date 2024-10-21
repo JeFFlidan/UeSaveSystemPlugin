@@ -12,6 +12,10 @@ USaveSystemSettings::USaveSystemSettings(const FObjectInitializer& Initializer)
 	
 	DefaultSaveSlotName = "SaveGame01";
 	bTakeScreenshot = true;
+	bSaveScreenshotAsSeparateFile = true;
 	ScreenshotFormat = EScreenshotFormat::JPEG;
 	CompressionRate = 90;
+	bUseCustomScreenshotDimensions = false;
+	Width = 228;
+	Height = 128;
 }

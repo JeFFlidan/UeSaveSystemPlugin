@@ -23,6 +23,7 @@ public:
 	UScreenshotTaker();
 
 	bool IsScreenshotRequested() const { return bIsScreenshotRequested; }
+	EScreenshotFormat GetScreenshotFormat() const { return ScreenshotFormat; }
 	void SetImageFormat(EScreenshotFormat InImageFormat) { ScreenshotFormat = InImageFormat; }
 	void SetCompressionRate(int32 InCompressionRate) { CompressionRate = InCompressionRate; }
 	
@@ -35,4 +36,7 @@ protected:
 	bool bIsScreenshotRequested;
 	EScreenshotFormat ScreenshotFormat;
 	int32 CompressionRate;
+	bool bUseCustomDimensions;
+	int32 Width;
+	int32 Height;
 };

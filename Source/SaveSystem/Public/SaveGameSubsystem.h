@@ -51,13 +51,15 @@ protected:
 
 	bool bShouldTakeScreenshot;
 	bool bShouldSaveInDelegate;
+	bool bSaveScreenshotAsSeparateFile;
 
 	virtual void SaveAbilitySystemState();
 	virtual UAbilitySystemComponent* FindPlayerAbilitySystemComponent() const;
 
 	UFUNCTION()
-	virtual void HandleScreenshotTaken(const TArray<uint8>& ScreenshotData);
+	virtual void HandleScreenshotTaken(const TArray<uint8>& ScreenshotBytes);
 
 	void SaveGameToSlot() const;
 	bool CanRequestScreenshot() const { return bShouldTakeScreenshot && ScreenshotTaker; }
+	FString GetScreenshotFormat() const;
 };

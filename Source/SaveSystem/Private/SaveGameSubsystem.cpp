@@ -25,6 +25,7 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	const USaveSystemSettings* Settings = GetDefault<USaveSystemSettings>();
 	CurrentSlotName = Settings->DefaultSaveSlotName;
 	bShouldTakeScreenshot = Settings->bTakeScreenshot;
+	bSaveScreenshotAsSeparateFile = Settings->bSaveScreenshotAsSeparateFile;
 
 	if (bShouldTakeScreenshot)
 	{
@@ -217,10 +218,24 @@ UAbilitySystemComponent* USaveGameSubsystem::FindPlayerAbilitySystemComponent() 
 	return nullptr;
 }
 
-void USaveGameSubsystem::HandleScreenshotTaken(const TArray<uint8>& ScreenshotData)
+void USaveGameSubsystem::HandleScreenshotTaken(const TArray<uint8>& ScreenshotBytes)
 {
-	CurrentSaveGame->ScreenshotBytes = ScreenshotData;
-	UE_LOG(LogSaveSystem, Display, TEXT("Screenshot bytes: %d"), CurrentSaveGame->ScreenshotBytes.Num())
+	UE_LOG(LogSaveSystem, Display, TEXT("Screenshot bytes: %d"), ScreenshotBytes.Num())
+	
+	if (bSaveScreenshotAsSeparateFile)
+	{
+		const FString ImageDirectory = FString::Printf(TEXT("%s/SaveGames"),
+			*UKismetSystemLibrary::GetProjectSavedDirectory());
+		CurrentSaveGame->ScreenshotData = FString::Printf(TEXT("%s/%s.%s"),
+			*ImageDirectory, *CurrentSlotName, *GetScreenshotFormat());
+
+		FFileHelper::SaveArrayToFile(ScreenshotBytes, GetData(CurrentSaveGame->ScreenshotData));
+	}
+	else
+	{
+		CurrentSaveGame->ScreenshotData = BytesToString(ScreenshotBytes.GetData(), ScreenshotBytes.Num());
+		UE_LOG(LogSaveSystem, Display, TEXT("Screenshot data size: %d"), CurrentSaveGame->ScreenshotData.Len());
+	}
 
 	if (bShouldSaveInDelegate)
 	{
@@ -233,4 +248,18 @@ void USaveGameSubsystem::SaveGameToSlot() const
 {
 	UGameplayStatics::SaveGameToSlot(CurrentSaveGame, CurrentSlotName, 0);
 	UE_LOG(LogSaveSystem, Display, TEXT("Wrote SaveGameData to slot %s"), *CurrentSlotName)
+}
+
+FString USaveGameSubsystem::GetScreenshotFormat() const
+{
+	int32 Index = 0;
+	FString EnumName = UEnum::GetValueAsString(ScreenshotTaker->GetScreenshotFormat());
+	bool bResult = EnumName.FindLastChar(':', Index);
+
+	if (bResult)
+	{
+		return EnumName.Mid(Index + 1).ToLower();
+	}
+
+	return "";
 }
