@@ -9,5 +9,9 @@ USaveSystemSettings::USaveSystemSettings(const FObjectInitializer& Initializer)
 {
 	CategoryName = "Plugins";
 	SectionName = "Save System";
+	
 	DefaultSaveSlotName = "SaveGame01";
+	bTakeScreenshot = true;
+	ScreenshotFormat = EScreenshotFormat::JPEG;
+	CompressionRate = 90;
 }

@@ -5,6 +5,7 @@
 #include "SaveGameData.h"
 #include "SavableObjectInterface.h"
 #include "SaveSystemLogChannels.h"
+#include "ScreenshotTaker.h"
 
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -18,9 +19,18 @@
 void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+	
+	bShouldSaveInDelegate = false;
 
 	const USaveSystemSettings* Settings = GetDefault<USaveSystemSettings>();
 	CurrentSlotName = Settings->DefaultSaveSlotName;
+	bShouldTakeScreenshot = Settings->bTakeScreenshot;
+
+	if (bShouldTakeScreenshot)
+	{
+		ScreenshotTaker = NewObject<UScreenshotTaker>();
+		ScreenshotTaker->OnScreenshotTaken.AddDynamic(this, &ThisClass::HandleScreenshotTaken);
+	}
 }
 
 void USaveGameSubsystem::SetSlotName(FString NewSlotName)
@@ -38,6 +48,11 @@ void USaveGameSubsystem::WriteSaveGame(FString InSlotName)
 	SetSlotName(InSlotName);
 	
 	CurrentSaveGame->SavedActors.Empty();
+
+	if (CanRequestScreenshot())
+	{
+		ScreenshotTaker->RequestScreenshot();
+	}
 
 	for (AActor* Actor : TActorRange<AActor>(GetWorld()))
 	{
@@ -60,8 +75,21 @@ void USaveGameSubsystem::WriteSaveGame(FString InSlotName)
 
 	SaveAbilitySystemState();
 
-	UGameplayStatics::SaveGameToSlot(CurrentSaveGame, CurrentSlotName, 0);
-	UE_LOG(LogSaveSystem, Display, TEXT("Wrote SaveGameData to slot %s"), *CurrentSlotName)
+	if (CanRequestScreenshot())
+	{
+		if (!ScreenshotTaker->IsScreenshotRequested())
+		{
+			SaveGameToSlot();
+		}
+		else
+		{
+			bShouldSaveInDelegate = true;
+		}
+	}
+	else
+	{
+		SaveGameToSlot();
+	}
 	
 	OnSaveGameWritten.Broadcast(CurrentSaveGame);
 }
@@ -187,4 +215,22 @@ UAbilitySystemComponent* USaveGameSubsystem::FindPlayerAbilitySystemComponent() 
 	}
 
 	return nullptr;
+}
+
+void USaveGameSubsystem::HandleScreenshotTaken(const TArray<uint8>& ScreenshotData)
+{
+	CurrentSaveGame->ScreenshotBytes = ScreenshotData;
+	UE_LOG(LogSaveSystem, Display, TEXT("Screenshot bytes: %d"), CurrentSaveGame->ScreenshotBytes.Num())
+
+	if (bShouldSaveInDelegate)
+	{
+		SaveGameToSlot();
+		bShouldSaveInDelegate = false;
+	}
+}
+
+void USaveGameSubsystem::SaveGameToSlot() const
+{
+	UGameplayStatics::SaveGameToSlot(CurrentSaveGame, CurrentSlotName, 0);
+	UE_LOG(LogSaveSystem, Display, TEXT("Wrote SaveGameData to slot %s"), *CurrentSlotName)
 }

@@ -2,7 +2,9 @@
 
 #pragma once
 
+#include "SaveSystemCommon.h"
 #include "Engine/DeveloperSettings.h"
+
 #include "SaveSystemSettings.generated.h"
 
 /**
@@ -16,6 +18,15 @@ class SAVESYSTEM_API USaveSystemSettings : public UDeveloperSettings
 public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "General")
 	FString DefaultSaveSlotName;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Screenshot")
+	bool bTakeScreenshot;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Screenshot", meta = (EditCondition = "bTakeScreenshot"))
+	int32 CompressionRate;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Screenshot", meta = (EditCondition = "bTakeScreenshot"))
+	EScreenshotFormat ScreenshotFormat;
 
 	USaveSystemSettings(const FObjectInitializer& Initializer);
 };

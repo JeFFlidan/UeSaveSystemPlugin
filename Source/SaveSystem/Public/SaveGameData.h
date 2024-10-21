@@ -52,4 +52,10 @@ public:
 
 	UPROPERTY()
 	TArray<FGameplayAbilitySaveData> SavedPlayerAbilities;
+	
+	UPROPERTY()
+	TArray<uint8> ScreenshotBytes;
+
+	UFUNCTION(BlueprintCallable, Category = "Save System", meta = (WorldContext = "WorldContextObject"))
+	UTexture2D* GetScreenshotTexture(UObject* WorldContextObject) const;
 };

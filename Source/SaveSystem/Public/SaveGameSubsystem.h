@@ -6,6 +6,7 @@
 #include "SaveGameSubsystem.generated.h"
 
 class USaveGameData;
+class UScreenshotTaker;
 class UAbilitySystemComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnReadWriteSaveGame, USaveGameData*, SaveGameObj);
@@ -43,8 +44,20 @@ protected:
 	UPROPERTY()
 	TObjectPtr<USaveGameData> CurrentSaveGame;
 
+	UPROPERTY()
+	TObjectPtr<UScreenshotTaker> ScreenshotTaker;
+
 	FString CurrentSlotName;
+
+	bool bShouldTakeScreenshot;
+	bool bShouldSaveInDelegate;
 
 	virtual void SaveAbilitySystemState();
 	virtual UAbilitySystemComponent* FindPlayerAbilitySystemComponent() const;
+
+	UFUNCTION()
+	virtual void HandleScreenshotTaken(const TArray<uint8>& ScreenshotData);
+
+	void SaveGameToSlot() const;
+	bool CanRequestScreenshot() const { return bShouldTakeScreenshot && ScreenshotTaker; }
 };
