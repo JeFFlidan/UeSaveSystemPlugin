@@ -38,15 +38,6 @@ struct FGameplayAbilitySaveData
 	TSubclassOf<UGameplayAbility> AbilityClass;
 };
 
-USTRUCT(BlueprintType)
-struct FSaveGameMetadata
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> Screenshot;
-};
-
 /**
  * 
  */

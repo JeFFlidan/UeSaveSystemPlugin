@@ -1,0 +1,28 @@
+// Copyright Kyrylo Zaverukha. All Rights Reserved.
+
+#pragma once
+
+#include "SaveGameMetadata.generated.h"
+
+class UTexture2D;
+
+/**
+ * 
+ */
+UCLASS()
+class SAVESYSTEM_API USaveGameMetadata : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(BlueprintReadOnly, Category = "Metadata", Transient)
+	TObjectPtr<UTexture2D> Screenshot;
+	
+	UPROPERTY()
+	FString ScreenshotData;
+
+	virtual void InitMetadata();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Save Game | Metadata")
+	void BP_InitMetadata();
+};

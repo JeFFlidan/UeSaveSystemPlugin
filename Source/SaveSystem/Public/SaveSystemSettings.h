@@ -7,6 +7,8 @@
 
 #include "SaveSystemSettings.generated.h"
 
+class USaveGameMetadata;
+
 /**
  * 
  */
@@ -18,6 +20,15 @@ class SAVESYSTEM_API USaveSystemSettings : public UDeveloperSettings
 public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "General")
 	FString DefaultSaveSlotName;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "General")
+	bool bCreateSeparateFolderForSave;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "General")
+	bool bCreateMetadata;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "General", meta = (EditCondition = "bCreateMetadata"))
+	TSubclassOf<USaveGameMetadata> MetadataClass;
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Screenshot")
 	bool bTakeScreenshot;

@@ -7,6 +7,8 @@
 
 class USaveGameData;
 class UScreenshotTaker;
+class USaveSystemSettings;
+class USaveGameMetadata;
 class UAbilitySystemComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnReadWriteSaveGame, USaveGameData*, SaveGameObj);
@@ -40,18 +42,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Save System")
 	virtual void LoadPlayerAbilitySystemState();
 
+	UFUNCTION(BlueprintCallable, Category = "Save System")
+	virtual void LoadAllSaveGameMetadata();
+
 protected:
 	UPROPERTY()
 	TObjectPtr<USaveGameData> CurrentSaveGame;
 
 	UPROPERTY()
+	TObjectPtr<USaveGameMetadata> SaveGameMetadata;
+	
+	UPROPERTY()
 	TObjectPtr<UScreenshotTaker> ScreenshotTaker;
 
-	FString CurrentSlotName;
+	UPROPERTY()
+	TObjectPtr<const USaveSystemSettings> Settings;
 
-	bool bShouldTakeScreenshot;
+	FString CurrentSlotName;
+	FString CurrentMetadataFilename;
+	
 	bool bShouldSaveInDelegate;
-	bool bSaveScreenshotAsSeparateFile;
 
 	virtual void SaveAbilitySystemState();
 	virtual UAbilitySystemComponent* FindPlayerAbilitySystemComponent() const;
@@ -59,7 +69,11 @@ protected:
 	UFUNCTION()
 	virtual void HandleScreenshotTaken(const TArray<uint8>& ScreenshotBytes);
 
-	void SaveGameToSlot() const;
-	bool CanRequestScreenshot() const { return bShouldTakeScreenshot && ScreenshotTaker; }
-	FString GetScreenshotFormat() const;
+	void SaveGameToSlot() ;
+	void SaveMetadata();
+	void ReadMetadata();
+	
+	bool CanRequestScreenshot() const;
+	FString GetSaveDirectory() const;
+	FString GetScreenshotFilename() const;
 };

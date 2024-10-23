@@ -3,6 +3,7 @@
 #include "SaveGameSubsystem.h"
 #include "SaveSystemSettings.h"
 #include "SaveGameData.h"
+#include "SaveGameMetadata.h"
 #include "SavableObjectInterface.h"
 #include "SaveSystemLogChannels.h"
 #include "ScreenshotTaker.h"
@@ -13,6 +14,8 @@
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/Pawn.h"
 #include "Serialization/ObjectAndNameAsStringProxyArchive.h"
+#include "JsonObjectConverter.h"
+#include "Misc/FileHelper.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(SaveGameSubsystem)
 
@@ -22,15 +25,18 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	
 	bShouldSaveInDelegate = false;
 
-	const USaveSystemSettings* Settings = GetDefault<USaveSystemSettings>();
-	CurrentSlotName = Settings->DefaultSaveSlotName;
-	bShouldTakeScreenshot = Settings->bTakeScreenshot;
-	bSaveScreenshotAsSeparateFile = Settings->bSaveScreenshotAsSeparateFile;
+	Settings = GetDefault<USaveSystemSettings>();
+	SetSlotName(Settings->DefaultSaveSlotName);
 
-	if (bShouldTakeScreenshot)
+	if (Settings->bTakeScreenshot)
 	{
 		ScreenshotTaker = NewObject<UScreenshotTaker>();
 		ScreenshotTaker->OnScreenshotTaken.AddDynamic(this, &ThisClass::HandleScreenshotTaken);
+	}
+
+	if (Settings->bCreateMetadata)
+	{
+		SaveGameMetadata = Settings->MetadataClass->GetDefaultObject<USaveGameMetadata>();
 	}
 }
 
@@ -41,7 +47,19 @@ void USaveGameSubsystem::SetSlotName(FString NewSlotName)
 		return;
 	}
 
-	CurrentSlotName = NewSlotName;
+	if (Settings->bCreateSeparateFolderForSave)
+	{
+		CurrentSlotName = FString::Printf(TEXT("%s/%s"), *NewSlotName, *NewSlotName);
+	}
+	else
+	{
+		CurrentSlotName = NewSlotName;
+	}
+
+	if (Settings->bCreateMetadata)
+	{
+		CurrentMetadataFilename = FString::Printf(TEXT("%s/%s_Metadata.json"), *GetSaveDirectory(), *CurrentSlotName);
+	}
 }
 
 void USaveGameSubsystem::WriteSaveGame(FString InSlotName)
@@ -107,7 +125,7 @@ void USaveGameSubsystem::LoadSaveGame(FString InSlotName)
 			UE_LOG(LogSaveSystem, Warning, TEXT("Failed to load SaveGameData slot %s"), *CurrentSlotName);
 			return;
 		}
-
+		
 		UE_LOG(LogSaveSystem, Display, TEXT("Loaded SaveGameData from slot %s"), *CurrentSlotName);
 
 		for (AActor* Actor : TActorRange<AActor>(GetWorld()))
@@ -172,6 +190,11 @@ void USaveGameSubsystem::LoadPlayerAbilitySystemState()
 	}
 }
 
+void USaveGameSubsystem::LoadAllSaveGameMetadata()
+{
+	
+}
+
 void USaveGameSubsystem::SaveAbilitySystemState()
 {
 	UAbilitySystemComponent* ASC = FindPlayerAbilitySystemComponent();
@@ -221,20 +244,16 @@ UAbilitySystemComponent* USaveGameSubsystem::FindPlayerAbilitySystemComponent() 
 void USaveGameSubsystem::HandleScreenshotTaken(const TArray<uint8>& ScreenshotBytes)
 {
 	UE_LOG(LogSaveSystem, Display, TEXT("Screenshot bytes: %d"), ScreenshotBytes.Num())
-	
-	if (bSaveScreenshotAsSeparateFile)
-	{
-		const FString ImageDirectory = FString::Printf(TEXT("%s/SaveGames"),
-			*UKismetSystemLibrary::GetProjectSavedDirectory());
-		CurrentSaveGame->ScreenshotData = FString::Printf(TEXT("%s/%s.%s"),
-			*ImageDirectory, *CurrentSlotName, *GetScreenshotFormat());
 
-		FFileHelper::SaveArrayToFile(ScreenshotBytes, GetData(CurrentSaveGame->ScreenshotData));
+	if (Settings->bSaveScreenshotAsSeparateFile)
+	{
+		SaveGameMetadata->ScreenshotData = GetScreenshotFilename();
+		FFileHelper::SaveArrayToFile(ScreenshotBytes, GetData(SaveGameMetadata->ScreenshotData));
 	}
 	else
 	{
-		CurrentSaveGame->ScreenshotData = BytesToString(ScreenshotBytes.GetData(), ScreenshotBytes.Num());
-		UE_LOG(LogSaveSystem, Display, TEXT("Screenshot data size: %d"), CurrentSaveGame->ScreenshotData.Len());
+		SaveGameMetadata->ScreenshotData = BytesToString(ScreenshotBytes.GetData(), ScreenshotBytes.Num());
+		UE_LOG(LogSaveSystem, Display, TEXT("Screenshot data size: %d"), SaveGameMetadata->ScreenshotData.Len());
 	}
 
 	if (bShouldSaveInDelegate)
@@ -244,22 +263,63 @@ void USaveGameSubsystem::HandleScreenshotTaken(const TArray<uint8>& ScreenshotBy
 	}
 }
 
-void USaveGameSubsystem::SaveGameToSlot() const
+void USaveGameSubsystem::SaveGameToSlot()
 {
+	SaveMetadata();
 	UGameplayStatics::SaveGameToSlot(CurrentSaveGame, CurrentSlotName, 0);
 	UE_LOG(LogSaveSystem, Display, TEXT("Wrote SaveGameData to slot %s"), *CurrentSlotName)
 }
 
-FString USaveGameSubsystem::GetScreenshotFormat() const
+void USaveGameSubsystem::SaveMetadata()
 {
-	int32 Index = 0;
-	FString EnumName = UEnum::GetValueAsString(ScreenshotTaker->GetScreenshotFormat());
-	bool bResult = EnumName.FindLastChar(':', Index);
-
-	if (bResult)
+	if (!Settings->bCreateMetadata)
 	{
-		return EnumName.Mid(Index + 1).ToLower();
+		return;
+	}
+	
+	SaveGameMetadata->InitMetadata();
+
+	TSharedRef<FJsonObject> JsonObject(new FJsonObject());
+
+	if (!FJsonObjectConverter::UStructToJsonObject(SaveGameMetadata->GetClass(), SaveGameMetadata, JsonObject))
+	{
+		UE_LOG(LogSaveSystem, Error, TEXT("Failed to convert metadata to json object."));
+		return;
 	}
 
-	return "";
+	FString JsonString;
+	if (!FJsonSerializer::Serialize(JsonObject, TJsonWriterFactory<>::Create(&JsonString, 0)))
+	{
+		UE_LOG(LogSaveSystem, Error, TEXT("Failed to serialize json object to string."));
+		return;
+	}
+
+	if (!FFileHelper::SaveStringToFile(JsonString, GetData(CurrentMetadataFilename)))
+	{
+		UE_LOG(LogSaveSystem, Error, TEXT("Failed to save json string to file %s"), *CurrentMetadataFilename);
+	}
+}
+
+void USaveGameSubsystem::ReadMetadata()
+{
+	if (!Settings->bCreateMetadata)
+    {
+    	return;
+    }
+}
+
+bool USaveGameSubsystem::CanRequestScreenshot() const
+{
+	return Settings->bTakeScreenshot && ScreenshotTaker;
+}
+
+FString USaveGameSubsystem::GetSaveDirectory() const
+{
+	return FString::Printf(TEXT("%s/SaveGames"), *UKismetSystemLibrary::GetProjectSavedDirectory());
+}
+
+FString USaveGameSubsystem::GetScreenshotFilename() const
+{
+	const FString ScreenshotFormat = UEnum::GetDisplayValueAsText(ScreenshotTaker->GetScreenshotFormat()).ToString().ToLower();
+	return FString::Printf(TEXT("%s/%s.%s"), *GetSaveDirectory(), *CurrentSlotName, *ScreenshotFormat);
 }

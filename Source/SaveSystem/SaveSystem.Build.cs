@@ -40,7 +40,9 @@ public class SaveSystem : ModuleRules
 				"SlateCore",
 				"DeveloperSettings",
 				"GameplayAbilities",
-				"GameplayTags"
+				"GameplayTags",
+				"JsonUtilities",
+				"Json",
 			}
 			);
 		
