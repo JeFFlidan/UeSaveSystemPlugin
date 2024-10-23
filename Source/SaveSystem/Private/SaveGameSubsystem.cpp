@@ -10,12 +10,14 @@
 
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetRenderingLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/Pawn.h"
 #include "Serialization/ObjectAndNameAsStringProxyArchive.h"
 #include "JsonObjectConverter.h"
 #include "Misc/FileHelper.h"
+#include "HAL/FileManager.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(SaveGameSubsystem)
 
@@ -26,7 +28,6 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	bShouldSaveInDelegate = false;
 
 	Settings = GetDefault<USaveSystemSettings>();
-	SetSlotName(Settings->DefaultSaveSlotName);
 
 	if (Settings->bTakeScreenshot)
 	{
@@ -36,8 +37,10 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	if (Settings->bCreateMetadata)
 	{
-		SaveGameMetadata = Settings->MetadataClass->GetDefaultObject<USaveGameMetadata>();
+		MetadataCDO = Settings->MetadataClass->GetDefaultObject<USaveGameMetadata>();
 	}
+
+	SetSlotName(Settings->DefaultSaveSlotName);
 }
 
 void USaveGameSubsystem::SetSlotName(FString NewSlotName)
@@ -58,7 +61,8 @@ void USaveGameSubsystem::SetSlotName(FString NewSlotName)
 
 	if (Settings->bCreateMetadata)
 	{
-		CurrentMetadataFilename = FString::Printf(TEXT("%s/%s_Metadata.json"), *GetSaveDirectory(), *CurrentSlotName);
+		MetadataCDO->SlotName = FText::FromString(NewSlotName);
+		CurrentMetadataFilename = FString::Printf(TEXT("%s/%s.json"), *GetSaveDirectory(), *CurrentSlotName);
 	}
 }
 
@@ -190,9 +194,29 @@ void USaveGameSubsystem::LoadPlayerAbilitySystemState()
 	}
 }
 
-void USaveGameSubsystem::LoadAllSaveGameMetadata()
+const TArray<USaveGameMetadata*>& USaveGameSubsystem::LoadAllSaveGameMetadata()
 {
+	LoadedMetadata.Empty();
 	
+	if (!Settings->bCreateMetadata)
+	{
+		return LoadedMetadata; // Empty array
+	}
+	
+	TArray<FString> MetadataPaths;
+	FString Extension = "*.json";
+	IFileManager& FileManager = IFileManager::Get();
+	FileManager.FindFilesRecursive(MetadataPaths, *GetSaveDirectory(), *Extension, true, false);
+
+	for (const FString& Path : MetadataPaths)
+	{
+		if (USaveGameMetadata* Metadata = ReadMetadata(Path))
+		{
+			LoadedMetadata.Add(Metadata);
+		}
+	}
+
+	return LoadedMetadata;
 }
 
 void USaveGameSubsystem::SaveAbilitySystemState()
@@ -247,13 +271,12 @@ void USaveGameSubsystem::HandleScreenshotTaken(const TArray<uint8>& ScreenshotBy
 
 	if (Settings->bSaveScreenshotAsSeparateFile)
 	{
-		SaveGameMetadata->ScreenshotData = GetScreenshotFilename();
-		FFileHelper::SaveArrayToFile(ScreenshotBytes, GetData(SaveGameMetadata->ScreenshotData));
+		FFileHelper::SaveArrayToFile(ScreenshotBytes, *GetScreenshotFilename());
 	}
 	else
 	{
-		SaveGameMetadata->ScreenshotData = BytesToString(ScreenshotBytes.GetData(), ScreenshotBytes.Num());
-		UE_LOG(LogSaveSystem, Display, TEXT("Screenshot data size: %d"), SaveGameMetadata->ScreenshotData.Len());
+		MetadataCDO->ScreenshotData = BytesToString(ScreenshotBytes.GetData(), ScreenshotBytes.Num());
+		UE_LOG(LogSaveSystem, Display, TEXT("Screenshot data size: %d"), MetadataCDO->ScreenshotData.Len());
 	}
 
 	if (bShouldSaveInDelegate)
@@ -277,11 +300,11 @@ void USaveGameSubsystem::SaveMetadata()
 		return;
 	}
 	
-	SaveGameMetadata->InitMetadata();
+	MetadataCDO->InitMetadata();
 
 	TSharedRef<FJsonObject> JsonObject(new FJsonObject());
 
-	if (!FJsonObjectConverter::UStructToJsonObject(SaveGameMetadata->GetClass(), SaveGameMetadata, JsonObject))
+	if (!FJsonObjectConverter::UStructToJsonObject(MetadataCDO->GetClass(), MetadataCDO, JsonObject))
 	{
 		UE_LOG(LogSaveSystem, Error, TEXT("Failed to convert metadata to json object."));
 		return;
@@ -294,18 +317,60 @@ void USaveGameSubsystem::SaveMetadata()
 		return;
 	}
 
-	if (!FFileHelper::SaveStringToFile(JsonString, GetData(CurrentMetadataFilename)))
+	if (!FFileHelper::SaveStringToFile(JsonString, *CurrentMetadataFilename))
 	{
-		UE_LOG(LogSaveSystem, Error, TEXT("Failed to save json string to file %s"), *CurrentMetadataFilename);
+		UE_LOG(LogSaveSystem, Error, TEXT("Failed to save json string to file %s."), *CurrentMetadataFilename);
 	}
 }
 
-void USaveGameSubsystem::ReadMetadata()
+USaveGameMetadata* USaveGameSubsystem::ReadMetadata(const FString& MetadataPath) const
 {
 	if (!Settings->bCreateMetadata)
     {
-    	return;
+    	return nullptr;
     }
+
+	FString JsonString;
+	if (!FFileHelper::LoadFileToString(JsonString, *MetadataPath))
+	{
+		UE_LOG(LogSaveSystem, Error, TEXT("Failed to read json string from file %s."), *MetadataPath);
+		return nullptr;
+	}
+
+	TSharedPtr<FJsonObject> JsonObject;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(JsonString), JsonObject))
+	{
+		UE_LOG(LogSaveSystem, Error, TEXT("Failed to deserialize json object from string."));
+		return nullptr;
+	}
+
+	USaveGameMetadata* Metadata = NewObject<USaveGameMetadata>();
+	if (!FJsonObjectConverter::JsonObjectToUStruct(JsonObject.ToSharedRef(), Metadata->GetClass(), Metadata))
+	{
+		UE_LOG(LogSaveSystem, Error, TEXT("Failed to convert json object to metadata."));
+		return nullptr;
+	}
+
+	if (Settings->bTakeScreenshot && Settings->bSaveScreenshotAsSeparateFile)
+	{
+		Metadata->Screenshot = LoadScreenshot(MetadataPath);
+	}
+
+	return Metadata;
+}
+
+UTexture2D* USaveGameSubsystem::LoadScreenshot(const FString& MetadataPath) const
+{
+	FString ScreenshotPath = FPaths::ChangeExtension(MetadataPath, GetScreenshotFormat());
+
+	TArray<uint8> ScreenshotBytes;
+	if (!FFileHelper::LoadFileToArray(ScreenshotBytes, *ScreenshotPath))
+	{
+		UE_LOG(LogSaveSystem, Error, TEXT("Failed to load screenshot from file %s."), *ScreenshotPath);
+		return nullptr;
+	}
+
+	return UKismetRenderingLibrary::ImportBufferAsTexture2D(GetWorld(), ScreenshotBytes);
 }
 
 bool USaveGameSubsystem::CanRequestScreenshot() const
@@ -320,6 +385,10 @@ FString USaveGameSubsystem::GetSaveDirectory() const
 
 FString USaveGameSubsystem::GetScreenshotFilename() const
 {
-	const FString ScreenshotFormat = UEnum::GetDisplayValueAsText(ScreenshotTaker->GetScreenshotFormat()).ToString().ToLower();
-	return FString::Printf(TEXT("%s/%s.%s"), *GetSaveDirectory(), *CurrentSlotName, *ScreenshotFormat);
+	return FString::Printf(TEXT("%s/%s.%s"), *GetSaveDirectory(), *CurrentSlotName, *GetScreenshotFormat());
+}
+
+FString USaveGameSubsystem::GetScreenshotFormat() const
+{
+	return UEnum::GetDisplayValueAsText(ScreenshotTaker->GetScreenshotFormat()).ToString().ToLower();
 }

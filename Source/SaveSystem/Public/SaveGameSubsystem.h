@@ -43,20 +43,26 @@ public:
 	virtual void LoadPlayerAbilitySystemState();
 
 	UFUNCTION(BlueprintCallable, Category = "Save System")
-	virtual void LoadAllSaveGameMetadata();
+	virtual const TArray<USaveGameMetadata*>& LoadAllSaveGameMetadata();
+
+	UFUNCTION(BlueprintPure, Category = "Save System")
+	virtual const TArray<USaveGameMetadata*>& GetCachedGameSaveMetadata() const { return LoadedMetadata; }
 
 protected:
 	UPROPERTY()
 	TObjectPtr<USaveGameData> CurrentSaveGame;
 
 	UPROPERTY()
-	TObjectPtr<USaveGameMetadata> SaveGameMetadata;
+	TObjectPtr<USaveGameMetadata> MetadataCDO;
 	
 	UPROPERTY()
 	TObjectPtr<UScreenshotTaker> ScreenshotTaker;
 
 	UPROPERTY()
 	TObjectPtr<const USaveSystemSettings> Settings;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USaveGameMetadata>> LoadedMetadata;
 
 	FString CurrentSlotName;
 	FString CurrentMetadataFilename;
@@ -71,9 +77,11 @@ protected:
 
 	void SaveGameToSlot() ;
 	void SaveMetadata();
-	void ReadMetadata();
+	USaveGameMetadata* ReadMetadata(const FString& MetadataPath) const;
+	UTexture2D* LoadScreenshot(const FString& MetadataPath) const;
 	
 	bool CanRequestScreenshot() const;
 	FString GetSaveDirectory() const;
 	FString GetScreenshotFilename() const;
+	FString GetScreenshotFormat() const;
 };

@@ -21,6 +21,9 @@ public:
 	UPROPERTY()
 	FString ScreenshotData;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Metadata")
+	FText SlotName;
+
 	virtual void InitMetadata();
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Save Game | Metadata")
