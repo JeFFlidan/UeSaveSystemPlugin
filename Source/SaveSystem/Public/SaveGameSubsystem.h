@@ -10,6 +10,8 @@ class UScreenshotTaker;
 class USaveSystemSettings;
 class USaveGameMetadata;
 class UAbilitySystemComponent;
+class UAttributeSet;
+struct FGameplayAttributeData;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnReadWriteSaveGame, USaveGameData*, SaveGameObj);
 
@@ -84,4 +86,6 @@ protected:
 	FString GetSaveDirectory() const;
 	FString GetScreenshotFilename() const;
 	FString GetScreenshotFormat() const;
+	FString GetAttributeName(const FProperty* Property) const;
+	FGameplayAttributeData* GetAttributeData(FProperty* Property, UAttributeSet* AttrSet);
 };

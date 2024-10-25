@@ -18,6 +18,7 @@
 #include "JsonObjectConverter.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
+#include "Engine/AssetManager.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(SaveGameSubsystem)
 
@@ -182,7 +183,28 @@ void USaveGameSubsystem::LoadPlayerAbilitySystemState()
 	{
 		return;
 	}
-	UE_LOG(LogSaveSystem, Display, TEXT("Ability data size: %d"), CurrentSaveGame->SavedPlayerAbilities.Num())
+
+	const TArray<UAttributeSet*>& AttrSets = ASC->GetSpawnedAttributes();
+	for (UAttributeSet* AttrSet : AttrSets)
+	{
+		for (TFieldIterator<FProperty> It(AttrSet->GetClass(), EFieldIterationFlags::IncludeSuper); It; ++It)
+		{
+			FProperty* Property = *It;
+
+			if (!FGameplayAttribute::IsGameplayAttributeDataProperty(Property))
+			{
+				continue;
+			}
+
+			if (FAttributeSaveData* AttrSaveData = CurrentSaveGame->SavedAttributes.Find(GetAttributeName(Property)))
+			{
+				FGameplayAttributeData* DataPtr = GetAttributeData(Property, AttrSet);
+				DataPtr->SetBaseValue(AttrSaveData->BaseValue);
+				DataPtr->SetCurrentValue(AttrSaveData->BaseValue);
+			}
+		}
+	}
+
 	for (const FGameplayAbilitySaveData& AbilityData : CurrentSaveGame->SavedPlayerAbilities)
 	{
 		UGameplayAbility* AbilityCDO = AbilityData.AbilityClass->GetDefaultObject<UGameplayAbility>();
@@ -191,6 +213,12 @@ void USaveGameSubsystem::LoadPlayerAbilitySystemState()
 		AbilitySpec.DynamicAbilityTags = AbilityData.DynamicTags;
 
 		ASC->GiveAbility(AbilitySpec);
+	}
+
+	for (const FGameplayEffectSaveData& EffectData : CurrentSaveGame->SavedGameplayEffects)
+	{
+		const UGameplayEffect* GameplayEffectCDO = EffectData.EffectClass->GetDefaultObject<UGameplayEffect>();
+		ASC->ApplyGameplayEffectToSelf(GameplayEffectCDO, EffectData.Level, ASC->MakeEffectContext());
 	}
 }
 
@@ -242,8 +270,42 @@ void USaveGameSubsystem::SaveAbilitySystemState()
 		AbilityData.AbilityClass = Ability->GetClass();
 		AbilityData.Level = Ability->GetAbilityLevel();
 		AbilityData.DynamicTags = Spec.DynamicAbilityTags;
-		
+
 		CurrentSaveGame->SavedPlayerAbilities.Add(AbilityData);
+	}
+
+	TArray<FGameplayEffectSpec> EffectSpecs;
+	ASC->GetAllActiveGameplayEffectSpecs(EffectSpecs);
+
+	for (const FGameplayEffectSpec& Spec : EffectSpecs)
+	{
+		const UGameplayEffect* Effect = Spec.Def;
+
+		if (!Effect->Implements<USavableObjectInterface>())
+		{
+			continue;
+		}
+
+		FGameplayEffectSaveData EffectData;
+		EffectData.Level = Spec.GetLevel();
+		EffectData.EffectClass = Effect->GetClass();
+
+		CurrentSaveGame->SavedGameplayEffects.Add(EffectData);
+	}
+
+	const TArray<UAttributeSet*>& AttrSets = ASC->GetSpawnedAttributes();
+	for (UAttributeSet* AttrSet : AttrSets)
+	{
+		for (TFieldIterator<FProperty> It(AttrSet->GetClass(), EFieldIterationFlags::IncludeSuper); It; ++It)
+		{
+			FProperty* Property = *It;
+
+			if (FGameplayAttribute::IsGameplayAttributeDataProperty(Property))
+			{
+				const FGameplayAttributeData* DataPtr = GetAttributeData(Property, AttrSet);
+				CurrentSaveGame->SavedAttributes.Add(GetAttributeName(Property), FAttributeSaveData(DataPtr->GetBaseValue()));
+			}
+		}
 	}
 }
 
@@ -391,4 +453,18 @@ FString USaveGameSubsystem::GetScreenshotFilename() const
 FString USaveGameSubsystem::GetScreenshotFormat() const
 {
 	return UEnum::GetDisplayValueAsText(ScreenshotTaker->GetScreenshotFormat()).ToString().ToLower();
+}
+
+FString USaveGameSubsystem::GetAttributeName(const FProperty* Property) const
+{
+	return FString::Printf(TEXT("%s.%s"), *Property->GetOwnerVariant().GetName(), *Property->GetName());
+}
+
+FGameplayAttributeData* USaveGameSubsystem::GetAttributeData(FProperty* Property, UAttributeSet* AttrSet)
+{
+	FStructProperty* StructProperty = CastFieldChecked<FStructProperty>(Property);
+	FGameplayAttributeData* DataPtr = StructProperty->ContainerPtrToValuePtr<FGameplayAttributeData>(AttrSet);
+	check(DataPtr);
+
+	return DataPtr;
 }

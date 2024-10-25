@@ -7,6 +7,7 @@
 #include "SaveGameData.generated.h"
 
 class UGameplayAbility;
+class UGameplayEffect;
 
 USTRUCT()
 struct FActorSaveData
@@ -38,6 +39,27 @@ struct FGameplayAbilitySaveData
 	TSubclassOf<UGameplayAbility> AbilityClass;
 };
 
+USTRUCT()
+struct FGameplayEffectSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	float Level;
+
+	UPROPERTY()
+	TSubclassOf<UGameplayEffect> EffectClass;
+};
+
+USTRUCT()
+struct FAttributeSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	float BaseValue;
+};
+
 /**
  * 
  */
@@ -52,4 +74,11 @@ public:
 
 	UPROPERTY()
 	TArray<FGameplayAbilitySaveData> SavedPlayerAbilities;
+
+	UPROPERTY()
+	TArray<FGameplayEffectSaveData> SavedGameplayEffects;
+
+	// Key has the structure HealthSet.Health
+	UPROPERTY()
+	TMap<FString, FAttributeSaveData> SavedAttributes;
 };
