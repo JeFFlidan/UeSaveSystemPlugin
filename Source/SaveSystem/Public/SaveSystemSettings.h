@@ -8,11 +8,12 @@
 #include "SaveSystemSettings.generated.h"
 
 class USaveGameMetadata;
+class UAutosaveCondition;
 
 /**
  * 
  */
-UCLASS(Config = SaveSystemSettings, DefaultConfig, meta = (DisplayName = "Save System"))
+UCLASS(Config = SaveSystemSettings, DefaultConfig)
 class SAVESYSTEM_API USaveSystemSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
@@ -24,17 +25,33 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "General")
 	bool bCreateSeparateFolderForSave;
 
-	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "General")
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Autosave")
+	bool bEnableAutosave;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Autosave", meta = (EditCondition = "bEnableAutosave"))
+	FString DefaultAutosaveName;
+	
+	/**
+	 * At the end of a period of time in seconds, autosaving occurs.
+	 * After autosaving, the timer will be reset and the period will begin counting again.
+	 */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Autosave", meta = (EditCondition = "bEnableAutosave"))
+	float AutosavePeriod;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Autosave", meta = (EditCondition = "bEnableAutosave"))
+	int32 MaxAutosaveNum;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Autosave", meta = (EditCondition = "bEnableAutosave"))
+	TSubclassOf<UAutosaveCondition> AutosaveConditionClass;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Metadata")
 	bool bCreateMetadata;
 
-	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "General", meta = (EditCondition = "bCreateMetadata"))
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Metadata", meta = (EditCondition = "bCreateMetadata"))
 	TSubclassOf<USaveGameMetadata> MetadataClass;
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Screenshot")
 	bool bTakeScreenshot;
-
-	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Screenshot", meta = (EditCondition = "bTakeScreenshot"))
-	bool bSaveScreenshotAsSeparateFile;
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Screenshot", meta = (EditCondition = "bTakeScreenshot"))
 	int32 CompressionRate;

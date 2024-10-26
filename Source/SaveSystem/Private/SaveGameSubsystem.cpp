@@ -7,6 +7,7 @@
 #include "SavableObjectInterface.h"
 #include "SaveSystemLogChannels.h"
 #include "ScreenshotTaker.h"
+#include "AutosaveCondition.h"
 
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -25,10 +26,9 @@
 void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	
-	bShouldSaveInDelegate = false;
 
 	Settings = GetDefault<USaveSystemSettings>();
+	AutosaveCounter = 0;
 
 	if (Settings->bTakeScreenshot)
 	{
@@ -42,6 +42,12 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 
 	SetSlotName(Settings->DefaultSaveSlotName);
+
+	if (Settings->bEnableAutosave)
+	{
+		AutosaveCondition = Settings->AutosaveConditionClass->GetDefaultObject<UAutosaveCondition>();
+		GetWorld()->GetTimerManager().SetTimer(AutosaveTimer, this, &ThisClass::HandleAutosave, Settings->AutosavePeriod);
+	}
 }
 
 void USaveGameSubsystem::SetSlotName(FString NewSlotName)
@@ -70,14 +76,26 @@ void USaveGameSubsystem::SetSlotName(FString NewSlotName)
 void USaveGameSubsystem::WriteSaveGame(FString InSlotName)
 {
 	SetSlotName(InSlotName);
+	RequestScreenshot();
+	SaveGameState();
 	
+	OnSaveGameWritten.Broadcast(CurrentSaveGame);
+}
+
+void USaveGameSubsystem::SaveGameState()
+{
 	CurrentSaveGame->SavedActors.Empty();
+	CurrentSaveGame->SavedAttributes.Empty();
+	CurrentSaveGame->SavedGameplayEffects.Empty();
+	CurrentSaveGame->SavedPlayerAbilities.Empty();
 
-	if (CanRequestScreenshot())
-	{
-		ScreenshotTaker->RequestScreenshot();
-	}
+	SaveWorldState();
+	SaveAbilitySystemState();
+	SaveGameToSlot();
+}
 
+void USaveGameSubsystem::SaveWorldState()
+{
 	for (AActor* Actor : TActorRange<AActor>(GetWorld()))
 	{
 		if (!IsValid(Actor) || !Actor->Implements<USavableObjectInterface>())
@@ -96,26 +114,106 @@ void USaveGameSubsystem::WriteSaveGame(FString InSlotName)
 
 		CurrentSaveGame->SavedActors.Add(ActorData);
 	}
+}
 
-	SaveAbilitySystemState();
+void USaveGameSubsystem::SaveAbilitySystemState()
+{
+	UAbilitySystemComponent* ASC = FindPlayerAbilitySystemComponent();
 
-	if (CanRequestScreenshot())
+	if (!ASC)
 	{
-		if (!ScreenshotTaker->IsScreenshotRequested())
+		return;
+	}
+
+	const TArray<FGameplayAbilitySpec>& AbilitySpecs = ASC->GetActivatableAbilities();
+	for (const FGameplayAbilitySpec& Spec : AbilitySpecs)
+	{
+		UGameplayAbility* Ability = Spec.Ability;
+
+		if (!Ability->Implements<USavableObjectInterface>())
 		{
-			SaveGameToSlot();
+			continue;
 		}
-		else
+
+		FGameplayAbilitySaveData AbilityData;
+		AbilityData.AbilityClass = Ability->GetClass();
+		AbilityData.Level = Ability->GetAbilityLevel();
+		AbilityData.DynamicTags = Spec.DynamicAbilityTags;
+
+		CurrentSaveGame->SavedPlayerAbilities.Add(AbilityData);
+	}
+
+	TArray<FGameplayEffectSpec> EffectSpecs;
+	ASC->GetAllActiveGameplayEffectSpecs(EffectSpecs);
+
+	for (const FGameplayEffectSpec& Spec : EffectSpecs)
+	{
+		const UGameplayEffect* Effect = Spec.Def;
+
+		if (!Effect->Implements<USavableObjectInterface>())
 		{
-			bShouldSaveInDelegate = true;
+			continue;
+		}
+
+		FGameplayEffectSaveData EffectData;
+		EffectData.Level = Spec.GetLevel();
+		EffectData.EffectClass = Effect->GetClass();
+
+		CurrentSaveGame->SavedGameplayEffects.Add(EffectData);
+	}
+
+	const TArray<UAttributeSet*>& AttrSets = ASC->GetSpawnedAttributes();
+	for (UAttributeSet* AttrSet : AttrSets)
+	{
+		for (TFieldIterator<FProperty> It(AttrSet->GetClass(), EFieldIterationFlags::IncludeSuper); It; ++It)
+		{
+			FProperty* Property = *It;
+
+			if (FGameplayAttribute::IsGameplayAttributeDataProperty(Property))
+			{
+				const FGameplayAttributeData* DataPtr = GetAttributeData(Property, AttrSet);
+				CurrentSaveGame->SavedAttributes.Add(GetAttributeName(Property), FAttributeSaveData(DataPtr->GetBaseValue()));
+			}
 		}
 	}
-	else
+}
+
+void USaveGameSubsystem::HandleAutosave()
+{
+	if (!Settings->bEnableAutosave)
 	{
-		SaveGameToSlot();
+		return;
 	}
 	
-	OnSaveGameWritten.Broadcast(CurrentSaveGame);
+	AsyncTask(ENamedThreads::GameThread, [this]
+	{
+		while (true)
+		{
+			if (AutosaveCondition->IsAutosavePossible())
+			{
+				OnAutosaveStarted.Broadcast(CurrentSaveGame);
+				
+				SetSlotName(GetAutosaveSlotName());
+				SaveGameState();
+				RequestScreenshot();
+				
+				OnAutosaveFinished.Broadcast(CurrentSaveGame);
+				
+				FTimerManager& TimerManager = GetWorld()->GetTimerManager();
+				TimerManager.ClearTimer(AutosaveTimer);
+				TimerManager.SetTimer(AutosaveTimer, this, &ThisClass::HandleAutosave, Settings->AutosavePeriod);
+				
+				break;
+			}
+		}
+	});
+}
+
+void USaveGameSubsystem::SaveGameToSlot()
+{
+	SaveMetadata();
+	UGameplayStatics::SaveGameToSlot(CurrentSaveGame, CurrentSlotName, 0);
+	UE_LOG(LogSaveSystem, Display, TEXT("Wrote SaveGameData to slot %s"), *CurrentSlotName)
 }
 
 void USaveGameSubsystem::LoadSaveGame(FString InSlotName)
@@ -247,68 +345,6 @@ const TArray<USaveGameMetadata*>& USaveGameSubsystem::LoadAllSaveGameMetadata()
 	return LoadedMetadata;
 }
 
-void USaveGameSubsystem::SaveAbilitySystemState()
-{
-	UAbilitySystemComponent* ASC = FindPlayerAbilitySystemComponent();
-
-	if (!ASC)
-	{
-		return;
-	}
-
-	const TArray<FGameplayAbilitySpec>& AbilitySpecs = ASC->GetActivatableAbilities();
-	for (const FGameplayAbilitySpec& Spec : AbilitySpecs)
-	{
-		UGameplayAbility* Ability = Spec.Ability;
-
-		if (!Ability->Implements<USavableObjectInterface>())
-		{
-			continue;
-		}
-
-		FGameplayAbilitySaveData AbilityData;
-		AbilityData.AbilityClass = Ability->GetClass();
-		AbilityData.Level = Ability->GetAbilityLevel();
-		AbilityData.DynamicTags = Spec.DynamicAbilityTags;
-
-		CurrentSaveGame->SavedPlayerAbilities.Add(AbilityData);
-	}
-
-	TArray<FGameplayEffectSpec> EffectSpecs;
-	ASC->GetAllActiveGameplayEffectSpecs(EffectSpecs);
-
-	for (const FGameplayEffectSpec& Spec : EffectSpecs)
-	{
-		const UGameplayEffect* Effect = Spec.Def;
-
-		if (!Effect->Implements<USavableObjectInterface>())
-		{
-			continue;
-		}
-
-		FGameplayEffectSaveData EffectData;
-		EffectData.Level = Spec.GetLevel();
-		EffectData.EffectClass = Effect->GetClass();
-
-		CurrentSaveGame->SavedGameplayEffects.Add(EffectData);
-	}
-
-	const TArray<UAttributeSet*>& AttrSets = ASC->GetSpawnedAttributes();
-	for (UAttributeSet* AttrSet : AttrSets)
-	{
-		for (TFieldIterator<FProperty> It(AttrSet->GetClass(), EFieldIterationFlags::IncludeSuper); It; ++It)
-		{
-			FProperty* Property = *It;
-
-			if (FGameplayAttribute::IsGameplayAttributeDataProperty(Property))
-			{
-				const FGameplayAttributeData* DataPtr = GetAttributeData(Property, AttrSet);
-				CurrentSaveGame->SavedAttributes.Add(GetAttributeName(Property), FAttributeSaveData(DataPtr->GetBaseValue()));
-			}
-		}
-	}
-}
-
 UAbilitySystemComponent* USaveGameSubsystem::FindPlayerAbilitySystemComponent() const
 {
 	APlayerState* PlayerState = UGameplayStatics::GetPlayerState(GetWorld(), 0);
@@ -330,29 +366,8 @@ UAbilitySystemComponent* USaveGameSubsystem::FindPlayerAbilitySystemComponent() 
 void USaveGameSubsystem::HandleScreenshotTaken(const TArray<uint8>& ScreenshotBytes)
 {
 	UE_LOG(LogSaveSystem, Display, TEXT("Screenshot bytes: %d"), ScreenshotBytes.Num())
-
-	if (Settings->bSaveScreenshotAsSeparateFile)
-	{
-		FFileHelper::SaveArrayToFile(ScreenshotBytes, *GetScreenshotFilename());
-	}
-	else
-	{
-		MetadataCDO->ScreenshotData = BytesToString(ScreenshotBytes.GetData(), ScreenshotBytes.Num());
-		UE_LOG(LogSaveSystem, Display, TEXT("Screenshot data size: %d"), MetadataCDO->ScreenshotData.Len());
-	}
-
-	if (bShouldSaveInDelegate)
-	{
-		SaveGameToSlot();
-		bShouldSaveInDelegate = false;
-	}
-}
-
-void USaveGameSubsystem::SaveGameToSlot()
-{
-	SaveMetadata();
-	UGameplayStatics::SaveGameToSlot(CurrentSaveGame, CurrentSlotName, 0);
-	UE_LOG(LogSaveSystem, Display, TEXT("Wrote SaveGameData to slot %s"), *CurrentSlotName)
+	
+	FFileHelper::SaveArrayToFile(ScreenshotBytes, *GetScreenshotFilename());
 }
 
 void USaveGameSubsystem::SaveMetadata()
@@ -413,12 +428,20 @@ USaveGameMetadata* USaveGameSubsystem::ReadMetadata(const FString& MetadataPath)
 		return nullptr;
 	}
 
-	if (Settings->bTakeScreenshot && Settings->bSaveScreenshotAsSeparateFile)
+	if (Settings->bTakeScreenshot)
 	{
 		Metadata->Screenshot = LoadScreenshot(MetadataPath);
 	}
 
 	return Metadata;
+}
+
+void USaveGameSubsystem::RequestScreenshot() const
+{
+	if (CanRequestScreenshot())
+	{
+		ScreenshotTaker->RequestScreenshot();
+	}
 }
 
 UTexture2D* USaveGameSubsystem::LoadScreenshot(const FString& MetadataPath) const
@@ -458,6 +481,22 @@ FString USaveGameSubsystem::GetScreenshotFormat() const
 FString USaveGameSubsystem::GetAttributeName(const FProperty* Property) const
 {
 	return FString::Printf(TEXT("%s.%s"), *Property->GetOwnerVariant().GetName(), *Property->GetName());
+}
+
+FString USaveGameSubsystem::GetAutosaveSlotName()
+{
+	return FString::Printf(TEXT("%s%02d"), *Settings->DefaultAutosaveName, GetAutosaveIndex());
+}
+
+int32 USaveGameSubsystem::GetAutosaveIndex()
+{
+	if (AutosaveCounter >= Settings->MaxAutosaveNum)
+	{
+		AutosaveCounter = 1;
+		return AutosaveCounter;
+	}
+
+	return ++AutosaveCounter;
 }
 
 FGameplayAttributeData* USaveGameSubsystem::GetAttributeData(FProperty* Property, UAttributeSet* AttrSet)

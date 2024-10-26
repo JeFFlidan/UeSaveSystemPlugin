@@ -9,7 +9,7 @@ class UTexture2D;
 /**
  * 
  */
-UCLASS()
+UCLASS(Abstract, Blueprintable, BlueprintType)
 class SAVESYSTEM_API USaveGameMetadata : public UObject
 {
 	GENERATED_BODY()
@@ -17,9 +17,6 @@ class SAVESYSTEM_API USaveGameMetadata : public UObject
 public:
 	UPROPERTY(BlueprintReadOnly, Category = "Metadata", Transient)
 	TObjectPtr<UTexture2D> Screenshot;
-	
-	UPROPERTY()
-	FString ScreenshotData;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Metadata")
 	FText SlotName;

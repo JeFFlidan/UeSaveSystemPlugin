@@ -2,6 +2,7 @@
 
 #include "SaveSystemSettings.h"
 #include "SaveGameMetadata.h"
+#include "AutosaveCondition.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(SaveSystemSettings)
 
@@ -13,10 +14,17 @@ USaveSystemSettings::USaveSystemSettings(const FObjectInitializer& Initializer)
 	
 	DefaultSaveSlotName = "SaveGame01";
 	bCreateSeparateFolderForSave = true;
+	
+	bEnableAutosave = true;
+	DefaultAutosaveName = "Autosave";
+	AutosavePeriod = 120.0f;
+	MaxAutosaveNum = 5;
+	AutosaveConditionClass = UAutosaveCondition::StaticClass();
+	
 	bCreateMetadata = true;
 	MetadataClass = USaveGameMetadata::StaticClass();
+	
 	bTakeScreenshot = true;
-	bSaveScreenshotAsSeparateFile = true;
 	ScreenshotFormat = EScreenshotFormat::JPEG;
 	CompressionRate = 90;
 	bUseCustomScreenshotDimensions = false;

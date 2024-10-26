@@ -11,6 +11,7 @@ class USaveSystemSettings;
 class USaveGameMetadata;
 class UAbilitySystemComponent;
 class UAttributeSet;
+class UAutosaveCondition;
 struct FGameplayAttributeData;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnReadWriteSaveGame, USaveGameData*, SaveGameObj);
@@ -29,6 +30,12 @@ public:
 
 	UPROPERTY(BlueprintAssignable)
 	FOnReadWriteSaveGame OnSaveGameWritten;
+
+	UPROPERTY(BlueprintAssignable)
+	FOnReadWriteSaveGame OnAutosaveStarted;
+
+	UPROPERTY(BlueprintAssignable)
+	FOnReadWriteSaveGame OnAutosaveFinished;
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
@@ -56,6 +63,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<USaveGameMetadata> MetadataCDO;
+
+	UPROPERTY()
+	TObjectPtr<UAutosaveCondition> AutosaveCondition;
 	
 	UPROPERTY()
 	TObjectPtr<UScreenshotTaker> ScreenshotTaker;
@@ -68,18 +78,25 @@ protected:
 
 	FString CurrentSlotName;
 	FString CurrentMetadataFilename;
-	
-	bool bShouldSaveInDelegate;
 
+	FTimerHandle AutosaveTimer;
+
+	int32 AutosaveCounter;
+
+	virtual void SaveGameState();
+	virtual void SaveWorldState();
 	virtual void SaveAbilitySystemState();
+	virtual void HandleAutosave();
 	virtual UAbilitySystemComponent* FindPlayerAbilitySystemComponent() const;
 
 	UFUNCTION()
 	virtual void HandleScreenshotTaken(const TArray<uint8>& ScreenshotBytes);
 
-	void SaveGameToSlot() ;
+	void SaveGameToSlot();
 	void SaveMetadata();
 	USaveGameMetadata* ReadMetadata(const FString& MetadataPath) const;
+	
+	void RequestScreenshot() const;
 	UTexture2D* LoadScreenshot(const FString& MetadataPath) const;
 	
 	bool CanRequestScreenshot() const;
@@ -87,5 +104,7 @@ protected:
 	FString GetScreenshotFilename() const;
 	FString GetScreenshotFormat() const;
 	FString GetAttributeName(const FProperty* Property) const;
+	FString GetAutosaveSlotName();
+	int32 GetAutosaveIndex();
 	FGameplayAttributeData* GetAttributeData(FProperty* Property, UAttributeSet* AttrSet);
 };
