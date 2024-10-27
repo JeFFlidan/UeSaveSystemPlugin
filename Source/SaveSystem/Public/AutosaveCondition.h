@@ -13,5 +13,8 @@ class SAVESYSTEM_API UAutosaveCondition : public UObject
 	GENERATED_BODY()
 
 public:
-	virtual bool IsAutosavePossible() const { return true; }
+	UFUNCTION(BlueprintNativeEvent)
+	bool IsAutosavePossible() const;
+
+	virtual bool IsAutosavePossible_Implementation() const { return true; }
 };
