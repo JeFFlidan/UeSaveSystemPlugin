@@ -7,7 +7,7 @@
 /**
  * 
  */
-UCLASS(Abstract, Blueprintable)
+UCLASS(Blueprintable)
 class SAVESYSTEM_API UAutosaveCondition : public UObject
 {
 	GENERATED_BODY()

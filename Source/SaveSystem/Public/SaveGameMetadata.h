@@ -9,7 +9,7 @@ class UTexture2D;
 /**
  * 
  */
-UCLASS(Abstract, Blueprintable, BlueprintType)
+UCLASS(Blueprintable, BlueprintType)
 class SAVESYSTEM_API USaveGameMetadata : public UObject
 {
 	GENERATED_BODY()

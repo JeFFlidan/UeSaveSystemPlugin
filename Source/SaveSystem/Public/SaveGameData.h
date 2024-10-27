@@ -25,6 +25,15 @@ struct FActorSaveData
 };
 
 USTRUCT()
+struct FLevelActorCollection
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FActorSaveData> SavedActors;
+};
+
+USTRUCT()
 struct FGameplayAbilitySaveData
 {
 	GENERATED_BODY()
@@ -70,7 +79,7 @@ class SAVESYSTEM_API USaveGameData : public USaveGame
 
 public:
 	UPROPERTY()
-	TArray<FActorSaveData> SavedActors;
+	TMap<FString, FLevelActorCollection> LevelActorCollections;
 
 	UPROPERTY()
 	TArray<FGameplayAbilitySaveData> SavedPlayerAbilities;

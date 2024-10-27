@@ -84,7 +84,7 @@ void USaveGameSubsystem::WriteSaveGame(FString InSlotName)
 
 void USaveGameSubsystem::SaveGameState()
 {
-	CurrentSaveGame->SavedActors.Empty();
+	CurrentSaveGame->LevelActorCollections.Empty();
 	CurrentSaveGame->SavedAttributes.Empty();
 	CurrentSaveGame->SavedGameplayEffects.Empty();
 	CurrentSaveGame->SavedPlayerAbilities.Empty();
@@ -102,17 +102,18 @@ void USaveGameSubsystem::SaveWorldState()
 		{
 			continue;
 		}
-
+		
 		FActorSaveData ActorData;
 		ActorData.Name = Actor->GetFName();
 		ActorData.Transform = Actor->GetActorTransform();
-
+		
 		FMemoryWriter MemWriter(ActorData.ByteData);
 		FObjectAndNameAsStringProxyArchive Archive(MemWriter, true);
 		Archive.ArIsSaveGame = true;
 		Actor->Serialize(Archive);
 
-		CurrentSaveGame->SavedActors.Add(ActorData);
+		FLevelActorCollection& LevelActorCollection = CurrentSaveGame->LevelActorCollections.FindOrAdd(Actor->GetLevel()->GetName());
+		LevelActorCollection.SavedActors.Add(ActorData);
 	}
 }
 
@@ -240,7 +241,15 @@ void USaveGameSubsystem::LoadSaveGame(FString InSlotName)
 
 			bool bIsActorValid = false;
 			
-			for (FActorSaveData ActorData : CurrentSaveGame->SavedActors)
+			FLevelActorCollection* ActorLevelCollection = CurrentSaveGame->LevelActorCollections.Find(Actor->GetLevel()->GetName());
+
+			if (!ActorLevelCollection)
+			{
+				Actor->Destroy();
+				continue;
+			}
+			
+			for (FActorSaveData ActorData : ActorLevelCollection->SavedActors)
 			{
 				if (ActorData.Name == Actor->GetFName())
 				{
@@ -312,7 +321,7 @@ void USaveGameSubsystem::LoadPlayerAbilitySystemState()
 
 		ASC->GiveAbility(AbilitySpec);
 	}
-
+	
 	for (const FGameplayEffectSaveData& EffectData : CurrentSaveGame->SavedGameplayEffects)
 	{
 		const UGameplayEffect* GameplayEffectCDO = EffectData.EffectClass->GetDefaultObject<UGameplayEffect>();
