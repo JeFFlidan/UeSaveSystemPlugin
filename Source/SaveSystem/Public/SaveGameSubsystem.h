@@ -5,6 +5,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "SaveGameSubsystem.generated.h"
 
+class APlayerState;
 class USaveGameData;
 class UScreenshotTaker;
 class USaveSystemSettings;
@@ -38,6 +39,9 @@ public:
 	FOnReadWriteSaveGame OnAutosaveFinished;
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+	UFUNCTION(BlueprintCallable, Category = "Save System")
+	virtual void LoadPlayerState();
 
 	UFUNCTION(BlueprintCallable, Category = "Save System")
 	void SetSlotName(FString NewSlotName);
@@ -86,8 +90,10 @@ protected:
 	virtual void SaveGameState();
 	virtual void SaveWorldState();
 	virtual void SaveAbilitySystemState();
+	virtual void SavePlayerState();
 	virtual void HandleAutosave();
 	virtual UAbilitySystemComponent* FindPlayerAbilitySystemComponent() const;
+	virtual void OverrideSpawnTransform();
 
 	UFUNCTION()
 	virtual void HandleScreenshotTaken(const TArray<uint8>& ScreenshotBytes);
@@ -107,4 +113,5 @@ protected:
 	FString GetAutosaveSlotName();
 	int32 GetAutosaveIndex();
 	FGameplayAttributeData* GetAttributeData(FProperty* Property, UAttributeSet* AttrSet);
+	APlayerState* GetPlayerState() const;
 };

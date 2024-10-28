@@ -30,4 +30,6 @@ USaveSystemSettings::USaveSystemSettings(const FObjectInitializer& Initializer)
 	bUseCustomScreenshotDimensions = false;
 	Width = 228;
 	Height = 128;
+
+	bSetControllerRotationAfterLoadingPlayerState = true;
 }

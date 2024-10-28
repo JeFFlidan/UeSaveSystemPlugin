@@ -13,7 +13,7 @@ class UAutosaveCondition;
 /**
  * 
  */
-UCLASS(Config = SaveSystemSettings, DefaultConfig)
+UCLASS(Config = SaveSystemSettings, DefaultConfig, HideCategories = (Advanced))
 class SAVESYSTEM_API USaveSystemSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
@@ -67,6 +67,9 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Screenshot", meta = (EditCondition = "bUseCustomScreenshotDimensions", ClampMin = 1, ClampMax = 2160))
 	int32 Height;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Advanced")
+	bool bSetControllerRotationAfterLoadingPlayerState;
 	
 	USaveSystemSettings(const FObjectInitializer& Initializer);
 };

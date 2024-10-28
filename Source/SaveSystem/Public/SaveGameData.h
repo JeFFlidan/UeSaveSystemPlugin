@@ -69,6 +69,18 @@ struct FAttributeSaveData
 	float BaseValue;
 };
 
+USTRUCT()
+struct FPlayerStateSaveData
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	FTransform Transform;
+
+	UPROPERTY()
+	bool bResumeAtTransform{false};
+};
+
 /**
  * 
  */
@@ -78,6 +90,9 @@ class SAVESYSTEM_API USaveGameData : public USaveGame
 	GENERATED_BODY()
 
 public:
+	UPROPERTY()
+	FPlayerStateSaveData PlayerStateSaveData;
+	
 	UPROPERTY()
 	TMap<FString, FLevelActorCollection> LevelActorCollections;
 

@@ -50,6 +50,11 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 }
 
+void USaveGameSubsystem::LoadPlayerState()
+{
+	OverrideSpawnTransform();
+}
+
 void USaveGameSubsystem::SetSlotName(FString NewSlotName)
 {
 	if (NewSlotName.IsEmpty())
@@ -91,6 +96,7 @@ void USaveGameSubsystem::SaveGameState()
 
 	SaveWorldState();
 	SaveAbilitySystemState();
+	SavePlayerState();
 	SaveGameToSlot();
 }
 
@@ -179,6 +185,20 @@ void USaveGameSubsystem::SaveAbilitySystemState()
 	}
 }
 
+void USaveGameSubsystem::SavePlayerState()
+{
+	APawn* Pawn = GetPlayerState()->GetPawn();
+	if (!ensure(Pawn))
+	{
+		return;
+	}
+	
+	CurrentSaveGame->PlayerStateSaveData.Transform = Pawn->GetTransform();
+
+	// Temp
+	CurrentSaveGame->PlayerStateSaveData.bResumeAtTransform = true;
+}
+
 void USaveGameSubsystem::HandleAutosave()
 {
 	if (!Settings->bEnableAutosave)
@@ -259,7 +279,7 @@ void USaveGameSubsystem::LoadSaveGame(FString InSlotName)
 					FObjectAndNameAsStringProxyArchive Archive(MemReader, true);
 					Archive.ArIsSaveGame = true;
 					Actor->Serialize(Archive);
-					ISavableObjectInterface::Execute_OnActorLoaded(Actor);
+					ISavableObjectInterface::Execute_OnObjectLoaded(Actor);
 
 					bIsActorValid = true;
 
@@ -320,12 +340,14 @@ void USaveGameSubsystem::LoadPlayerAbilitySystemState()
 		AbilitySpec.DynamicAbilityTags = AbilityData.DynamicTags;
 
 		ASC->GiveAbility(AbilitySpec);
+		ISavableObjectInterface::Execute_OnObjectLoaded(AbilityCDO);
 	}
 	
 	for (const FGameplayEffectSaveData& EffectData : CurrentSaveGame->SavedGameplayEffects)
 	{
-		const UGameplayEffect* GameplayEffectCDO = EffectData.EffectClass->GetDefaultObject<UGameplayEffect>();
+		UGameplayEffect* GameplayEffectCDO = EffectData.EffectClass->GetDefaultObject<UGameplayEffect>();
 		ASC->ApplyGameplayEffectToSelf(GameplayEffectCDO, EffectData.Level, ASC->MakeEffectContext());
+		ISavableObjectInterface::Execute_OnObjectLoaded(GameplayEffectCDO);
 	}
 }
 
@@ -370,6 +392,30 @@ UAbilitySystemComponent* USaveGameSubsystem::FindPlayerAbilitySystemComponent() 
 	}
 
 	return nullptr;
+}
+
+void USaveGameSubsystem::OverrideSpawnTransform()
+{
+	if (!ensure(CurrentSaveGame))
+	{
+		return;
+	}
+
+	const FPlayerStateSaveData& SaveData = CurrentSaveGame->PlayerStateSaveData;
+	APlayerState* PlayerState = GetPlayerState();
+	APawn* Pawn = PlayerState->GetPawn();
+	
+	if (Pawn && SaveData.bResumeAtTransform)
+	{
+		Pawn->SetActorTransform(SaveData.Transform);
+
+		if (Settings->bSetControllerRotationAfterLoadingPlayerState)
+		{
+			AController* Controller = PlayerState->GetOwningController();
+			check(Controller);
+			Controller->SetControlRotation(SaveData.Transform.Rotator());
+		}
+	}
 }
 
 void USaveGameSubsystem::HandleScreenshotTaken(const TArray<uint8>& ScreenshotBytes)
@@ -515,4 +561,11 @@ FGameplayAttributeData* USaveGameSubsystem::GetAttributeData(FProperty* Property
 	check(DataPtr);
 
 	return DataPtr;
+}
+
+APlayerState* USaveGameSubsystem::GetPlayerState() const
+{
+	APlayerState* PlayerState = UGameplayStatics::GetPlayerState(GetWorld(), 0);
+	check(PlayerState);
+	return PlayerState;
 }
