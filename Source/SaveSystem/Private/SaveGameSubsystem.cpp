@@ -80,6 +80,7 @@ void USaveGameSubsystem::SetSlotName(FString NewSlotName)
 
 void USaveGameSubsystem::WriteSaveGame(FString InSlotName)
 {
+	CreateSaveGameDataObject();
 	SetSlotName(InSlotName);
 	RequestScreenshot();
 	SaveGameState();
@@ -297,7 +298,7 @@ void USaveGameSubsystem::LoadSaveGame(FString InSlotName)
 	}
 	else
 	{
-		CurrentSaveGame = CastChecked<USaveGameData>(UGameplayStatics::CreateSaveGameObject(USaveGameData::StaticClass()));
+		CreateSaveGameDataObject();
 		UE_LOG(LogSaveSystem, Display, TEXT("Created new SaveGameData object"));
 	}
 }
@@ -568,4 +569,12 @@ APlayerState* USaveGameSubsystem::GetPlayerState() const
 	APlayerState* PlayerState = UGameplayStatics::GetPlayerState(GetWorld(), 0);
 	check(PlayerState);
 	return PlayerState;
+}
+
+void USaveGameSubsystem::CreateSaveGameDataObject()
+{
+	if (!CurrentSaveGame)
+	{
+		CurrentSaveGame = CastChecked<USaveGameData>(UGameplayStatics::CreateSaveGameObject(USaveGameData::StaticClass()));
+	}
 }

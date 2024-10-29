@@ -114,4 +114,5 @@ protected:
 	int32 GetAutosaveIndex();
 	FGameplayAttributeData* GetAttributeData(FProperty* Property, UAttributeSet* AttrSet);
 	APlayerState* GetPlayerState() const;
+	void CreateSaveGameDataObject();
 };
